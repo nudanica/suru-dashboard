@@ -1027,7 +1027,7 @@ function getAllDaily() {
   const dateMap = {};
   if(typeof Q1_DATA!=='undefined') Object.values(Q1_DATA).forEach(mo=>mo.daily.forEach(r=>{dateMap[r.date]=r;}));
   if(typeof APR_DATA!=='undefined') APR_DATA.daily.forEach(r=>{dateMap[r.date]=r;});
-  SURU_DATA.daily.forEach(r=>{dateMap[r.date]=r;});
+  if(typeof SURU_DATA!=='undefined') SURU_DATA.daily.forEach(r=>{dateMap[r.date]=r;});
   if(typeof EXTRA_MONTHS!=='undefined') Object.values(EXTRA_MONTHS).forEach(mo=>mo.daily.forEach(r=>{dateMap[r.date]=r;}));
   return Object.values(dateMap).sort((a,b)=>a.date.localeCompare(b.date));
 }
