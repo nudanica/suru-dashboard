@@ -2810,9 +2810,7 @@ function renderCustomers(){
 
   // อัปเดต stats cards
   const elUnique = document.getElementById('ret-unique');
-  const realTotal = activeMonths.reduce((s,mo)=>{
-    return s + (typeof MONTHLY_CUST_COUNT!=='undefined' ? (MONTHLY_CUST_COUNT[mo]||0) : (MONTHLY_CUST[mo]||[]).length);
-  }, 0);
+  const realTotal = activeMonths.reduce((s,mo)=> s + ((MONTHLY_CUST[mo]||[]).length), 0);
   if(elUnique) elUnique.textContent = N(realTotal)+' คน';
   const elUniqueSub = document.getElementById('ret-unique-sub');
   if(elUniqueSub) elUniqueSub.textContent = `คน (filter เดือนที่เลือก)`;
