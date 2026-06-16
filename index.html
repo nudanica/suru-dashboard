@@ -846,7 +846,7 @@ input[type=file]{display:none}
     <input type="date" id="cdt-from">
     <span style="color:var(--tx3);font-size:12px">–</span>
     <input type="date" id="cdt-to">
-    <button class="abtn" onclick="afC()">ดู</button>
+    <button class="abtn" onclick="afCust()">ดู</button>
   </div>
   <div class="ret-row">
     <div class="ret-card" style="background:var(--pkl);border-color:rgba(255,107,174,.2)">
@@ -1682,7 +1682,7 @@ function getMonthKey(dateObj){
 
 function getDataForMonth(mo){
   // แหล่งความจริงเดียว: SHEETS_DAILY จาก Google Sheets (ครอบคลุมทุกเดือน)
-  if(typeof SHEETS_DAILY!=='undefined' && SHEETS_DAILY.length>0){
+  if(typeof SHEETS_DAILY!=='undefined' && SHEETS_DAILY && SHEETS_DAILY.length>0){
     const moRows = SHEETS_DAILY.filter(r => r.date && r.date.startsWith(mo));
     if(moRows.length>0) return {daily:moRows};
   }
@@ -3428,7 +3428,7 @@ function renderVarTable(){
     // หาปีต่ำสุดจากข้อมูลจริง (ยั่งยืน รองรับข้อมูลก่อน 2024)
     let minYear = 2024;
     try {
-      if (typeof SHEETS_DAILY !== 'undefined' && SHEETS_DAILY.length > 0) {
+      if (typeof SHEETS_DAILY !== 'undefined' && SHEETS_DAILY && SHEETS_DAILY.length > 0) {
         const mY = SHEETS_DAILY.reduce((min, r) => {
           if (!r.date) return min;
           const yr = parseInt(r.date.slice(0, 4));
@@ -6050,7 +6050,7 @@ document.getElementById('e-date').value=new Date().toISOString().slice(0,10);
     // หาปีต่ำสุดจากข้อมูลจริงใน SHEETS_DAILY (ยั่งยืน รองรับข้อมูลก่อน 2024)
     var START = 2024; // fallback ถ้า SHEETS_DAILY ยังไม่โหลด
     try {
-      if (typeof SHEETS_DAILY !== 'undefined' && SHEETS_DAILY.length > 0) {
+      if (typeof SHEETS_DAILY !== 'undefined' && SHEETS_DAILY && SHEETS_DAILY.length > 0) {
         var minYear = SHEETS_DAILY.reduce(function(min, r) {
           if (!r.date) return min;
           var y = parseInt(r.date.slice(0, 4));
