@@ -1384,7 +1384,7 @@ async function loadFromSheets() {
     // โหลด daily และ monthly พร้อมกัน
     // Apps Script ต้องการ redirect follow
     const fetchOpts = {redirect: 'follow'};
-    const [dailyRes, monthlyRes, expRes, adsRes, cfRes, catsRes, cfCostRes, stockRes, taxRes, recurRes, mvRes, dvRes] = await Promise.all([
+    const [dailyRes, monthlyRes, expRes, adsRes, cfRes, catsRes, cfCostRes, stockRes, taxRes, recurRes, mvRes, dvRes, vcRes] = await Promise.all([
       fetch(SURU_API + '?type=daily', fetchOpts),
       fetch(SURU_API + '?type=monthly', fetchOpts),
       fetch(SURU_API + '?type=expenses', fetchOpts),
@@ -1396,7 +1396,8 @@ async function loadFromSheets() {
       fetch(SURU_API + '?type=tax', fetchOpts),
       fetch(SURU_API + '?type=recurring', fetchOpts).catch(()=>null),
       fetch(SURU_API + '?type=monthly_variable', fetchOpts).catch(()=>null),
-      fetch(SURU_API + '?type=daily_variable', fetchOpts).catch(()=>null)
+      fetch(SURU_API + '?type=daily_variable', fetchOpts).catch(()=>null),
+      fetch(SURU_API + '?type=varcats', fetchOpts).catch(()=>null)
     ]);
 
     const dailyJson   = await dailyRes.json();
@@ -1460,6 +1461,22 @@ async function loadFromSheets() {
       DAILY_LOADED_COUNT = Object.keys(dvStore).length;
       items.forEach(it => { if(!DAILY_ITEMS.includes(it)) DAILY_ITEMS.push(it); });
       console.log('✅ Restored daily_variable for ' + Object.keys(dvStore).length + ' days');
+    }
+
+    // ── Restore "รายชื่อหมวดผันแปร" จาก Sheets (เพิ่มแล้วไม่หาย แม้ยังไม่ลงยอด/สลับเดือน/รีเฟรช) ──
+    const vcJson = vcRes ? await vcRes.json().catch(()=>({status:'error'})) : {status:'error'};
+    if(vcJson.status === 'ok' && Array.isArray(vcJson.data)){
+      let vcCount = 0;
+      vcJson.data.forEach(row => {
+        const f  = String(row['ความถี่']||row['freq']||'').trim();
+        const it = String(row['รายการ']||row['item']||'').trim();
+        if(!it) return;
+        if(f==='daily'){      if(!DAILY_ITEMS.includes(it))    DAILY_ITEMS.push(it); }
+        else if(f==='yearly'){ if(!YEARLY_ITEMS.includes(it))   YEARLY_ITEMS.push(it); }
+        else {                 if(!VARIABLE_ITEMS.includes(it)) VARIABLE_ITEMS.push(it); if(!(it in VARIABLE_FREQ)) VARIABLE_FREQ[it]='monthly'; }
+        vcCount++;
+      });
+      console.log('✅ Restored varcats: ' + vcCount + ' หมวด');
     }
 
     // ── Restore ยอดภาษีรายเดือนจาก Sheets ──
@@ -3297,25 +3314,13 @@ function renderVarTabs(){
     return `<span onclick="switchVarTab('${key.replace(/'/g,"\\'")}')" style="font-size:12.5px;padding:6px 13px;border-radius:20px;border:1px solid ${on?'var(--pkd)':'var(--bd)'};background:${on?'var(--pkd)':'var(--sf)'};color:${on?'#fff':'var(--tx2)'};cursor:pointer;font-weight:600">${label}</span>`;
   };
   let html = '';
-  const VAR_PROTECTED = ['tax','ค่าส่งไปรษณีย์'];
   items.forEach(it=>{
     if(it==='tax'){ html += mkTab('tax','🗂️ ภาษี'); return; }
-    const on = _varActiveTab===it;
-    const canEdit = !VAR_PROTECTED.includes(it);
-    if(on && canEdit){
-      const k = it.replace(/'/g,"\\'");
-      const eb = 'cursor:pointer;font-size:13px;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:var(--sf);border:1px solid var(--bd)';
-      html += `<span style="display:inline-flex;align-items:center;gap:5px">`
-        + mkTab(it, varLabel(it))
-        + `<span onclick="event.stopPropagation();renameVariableItem('${k}')" title="แก้ชื่อหมวด" style="${eb}">✏️</span>`
-        + `<span onclick="event.stopPropagation();deleteVariableItem('${k}')" title="ลบหมวด" style="${eb}">🗑️</span>`
-        + `</span>`;
-    } else {
-      html += mkTab(it, varLabel(it));
-    }
+    html += mkTab(it, varLabel(it));
   });
   if(items.length===0) html += `<span style="font-size:12px;color:var(--tx3)">ยังไม่มีหมวด — กดเพิ่มหมวด</span>`;
   html += `<span onclick="document.getElementById('var-addbox').style.display='flex'" style="font-size:12.5px;padding:6px 12px;border-radius:20px;border:1.5px dashed var(--pk);background:var(--pkl);cursor:pointer;color:var(--pkd);font-weight:700">${addLabel}</span>`;
+  html += `<span onclick="openVarCatManager()" title="แก้ชื่อ/ลบหมวด" style="font-size:12.5px;padding:6px 12px;border-radius:20px;border:1px solid var(--cy);background:rgba(26,123,168,.08);cursor:pointer;color:var(--cyd);font-weight:700">⚙️ จัดการหมวด</span>`;
   tabs.innerHTML = html;
 }
 function switchVarTab(key){
@@ -3466,13 +3471,14 @@ function addVariableItem(){
   if(_varFreq==='daily') DAILY_ITEMS.push(name);
   else if(_varFreq==='monthly'){ VARIABLE_ITEMS.push(name); VARIABLE_FREQ[name]='monthly'; }
   else YEARLY_ITEMS.push(name);
+  persistVarCats();
   inp.value='';
   document.getElementById('var-addbox').style.display='none';
   _varActiveTab=name;
   renderVarTabs();
   if(_varFreq==='daily'){ switchVarFreqUI(); } else renderVarTable();
 }
-// ── เซฟ store ขึ้น Sheets ตามความถี่ (ใช้ตอน rename/ลบ — ส่งตัวเต็ม upsert ทับชื่อเก่า) ──
+// ── เซฟ store ยอดผันแปรขึ้น Sheets (ใช้ตอน rename/ลบ — ส่งตัวเต็ม upsert ทับชื่อเก่า) ──
 function _persistMonthlyVar(){
   const out=[];
   Object.keys(MONTHLY_VAR_STORE).forEach(mo=>Object.keys(MONTHLY_VAR_STORE[mo]).forEach(it=>out.push({month:mo,item:it,amount:MONTHLY_VAR_STORE[mo][it]})));
@@ -3483,16 +3489,22 @@ function _persistDailyVar(){
   Object.keys(DAILY_VAR_STORE).forEach(ds=>Object.keys(DAILY_VAR_STORE[ds]).forEach(it=>out.push({date:ds,item:it,amount:DAILY_VAR_STORE[ds][it]})));
   if(typeof backupToSheets==='function') backupToSheets('daily_variable', out);
 }
+// ── เก็บ "รายชื่อหมวดผันแปร" ลง Sheets แยกต่างหาก (เพิ่มแล้วไม่หายแม้ยังไม่ลงยอด/สลับเดือน/รีเฟรช) ──
+function persistVarCats(){
+  const out=[];
+  DAILY_ITEMS.forEach(it=>out.push({freq:'daily', item:it}));
+  VARIABLE_ITEMS.forEach(it=>out.push({freq:'monthly', item:it}));
+  YEARLY_ITEMS.forEach(it=>out.push({freq:'yearly', item:it}));
+  if(typeof backupToSheets==='function') backupToSheets('varcats', out);
+}
 const VAR_PROTECTED_ITEMS = ['tax','ค่าส่งไปรษณีย์'];
-// ── แก้ชื่อหมวดผันแปร (ย้ายยอดทุกเดือนชื่อเก่า→ใหม่ + เซฟ Sheets) ──
-function renameVariableItem(oldName){
-  if(VAR_PROTECTED_ITEMS.includes(oldName)){ alert('หมวดนี้แก้ชื่อไม่ได้ (ผูกกับระบบอัตโนมัติ)'); return; }
-  let nn = prompt('แก้ชื่อหมวด — ใส่อีโมจิหน้าชื่อได้ (เช่น 💧 ค่าน้ำ):', oldName);
-  if(nn===null) return;
-  nn = nn.trim().replace(/['"]/g,'');
-  if(!nn || nn===oldName) return;
+// ── core: ย้ายชื่อเก่า→ใหม่ (migrate ยอดทุกเดือน + เซฟยอด + เซฟรายชื่อ) ──
+function applyRenameVarItem(oldName, nn){
+  oldName=String(oldName); nn=String(nn||'').trim().replace(/['"]/g,'');
+  if(!nn || nn===oldName) return false;
+  if(VAR_PROTECTED_ITEMS.includes(oldName)){ alert('หมวดนี้แก้ชื่อไม่ได้ (ผูกกับระบบอัตโนมัติ)'); return false; }
   const all=[...DAILY_ITEMS,...VARIABLE_ITEMS,...YEARLY_ITEMS,'tax'];
-  if(all.includes(nn)){ alert('มีหมวดชื่อนี้แล้ว'); return; }
+  if(all.includes(nn)){ alert('มีหมวดชื่อนี้แล้ว'); return false; }
   if(_varFreq==='daily'){
     const i=DAILY_ITEMS.indexOf(oldName); if(i>=0) DAILY_ITEMS[i]=nn;
     Object.keys(DAILY_VAR_STORE).forEach(ds=>{ const o=DAILY_VAR_STORE[ds]; if(o&&(oldName in o)){ o[nn]=o[oldName]; delete o[oldName]; }});
@@ -3508,35 +3520,100 @@ function renameVariableItem(oldName){
     Object.keys(MONTHLY_VAR_STORE).forEach(mo=>{ if(/^\d{4}-00$/.test(mo)){ const o=MONTHLY_VAR_STORE[mo]; if(o&&(oldName in o)){ o[nn]=o[oldName]; delete o[oldName]; }}});
     _persistMonthlyVar();
   }
-  _varActiveTab = nn;
+  persistVarCats();
+  if(_varActiveTab===oldName) _varActiveTab=nn;
   renderVarTabs();
   if(_varFreq==='daily') renderVarDailyGrid(); else renderVarTable();
   if(typeof renderExpPage==='function') renderExpPage();
   if(typeof renderDash==='function') renderDash();
+  return true;
 }
-// ── ลบหมวดผันแปร (ลบยอดทุกเดือน + เซฟ Sheets) ──
-function deleteVariableItem(name){
-  if(VAR_PROTECTED_ITEMS.includes(name)){ alert('หมวดนี้ลบไม่ได้ (ผูกกับระบบอัตโนมัติ)'); return; }
-  if(!confirm(`ลบหมวด "${name}" ?\nยอดทุกเดือนของหมวดนี้จะถูกลบออกจาก Sheets ด้วย (ย้อนกลับไม่ได้)`)) return;
+// ── core: ลบหมวด (ลบยอดทุกเดือน + เซฟยอด + เซฟรายชื่อ) ──
+function applyDeleteVarItem(name){
+  if(VAR_PROTECTED_ITEMS.includes(name)){ alert('หมวดนี้ลบไม่ได้ (ผูกกับระบบอัตโนมัติ)'); return false; }
   if(_varFreq==='daily'){
     const i=DAILY_ITEMS.indexOf(name); if(i>=0) DAILY_ITEMS.splice(i,1);
     Object.keys(DAILY_VAR_STORE).forEach(ds=>{ const o=DAILY_VAR_STORE[ds]; if(o){ delete o[name]; if(!Object.keys(o).length) delete DAILY_VAR_STORE[ds]; }});
-    _persistDailyVar(); _varActiveTab = DAILY_ITEMS[0]||'';
+    _persistDailyVar(); if(_varActiveTab===name) _varActiveTab = DAILY_ITEMS[0]||'';
   } else if(_varFreq==='monthly'){
     const i=VARIABLE_ITEMS.indexOf(name); if(i>=0) VARIABLE_ITEMS.splice(i,1);
     delete VARIABLE_FREQ[name];
     Object.keys(MONTHLY_VAR_STORE).forEach(mo=>{ const o=MONTHLY_VAR_STORE[mo]; if(o){ delete o[name]; if(!Object.keys(o).length) delete MONTHLY_VAR_STORE[mo]; }});
-    _persistMonthlyVar(); _varActiveTab = 'tax';
+    _persistMonthlyVar(); if(_varActiveTab===name) _varActiveTab = 'tax';
   } else {
     const i=YEARLY_ITEMS.indexOf(name); if(i>=0) YEARLY_ITEMS.splice(i,1);
     Object.keys(YEARLY_VAR_STORE).forEach(y=>{ const o=YEARLY_VAR_STORE[y]; if(o){ delete o[name]; if(!Object.keys(o).length) delete YEARLY_VAR_STORE[y]; }});
     Object.keys(MONTHLY_VAR_STORE).forEach(mo=>{ if(/^\d{4}-00$/.test(mo)){ const o=MONTHLY_VAR_STORE[mo]; if(o){ delete o[name]; if(!Object.keys(o).length) delete MONTHLY_VAR_STORE[mo]; }}});
-    _persistMonthlyVar(); _varActiveTab = YEARLY_ITEMS[0]||'';
+    _persistMonthlyVar(); if(_varActiveTab===name) _varActiveTab = YEARLY_ITEMS[0]||'';
   }
+  persistVarCats();
   renderVarTabs();
   if(_varFreq==='daily') renderVarDailyGrid(); else renderVarTable();
   if(typeof renderExpPage==='function') renderExpPage();
   if(typeof renderDash==='function') renderDash();
+  return true;
+}
+function renameVariableItem(oldName){
+  if(VAR_PROTECTED_ITEMS.includes(oldName)){ alert('หมวดนี้แก้ชื่อไม่ได้ (ผูกกับระบบอัตโนมัติ)'); return; }
+  const nn = prompt('แก้ชื่อหมวด — ใส่อีโมจิหน้าชื่อได้ (เช่น 💧 ค่าน้ำ):', oldName);
+  if(nn===null) return;
+  applyRenameVarItem(oldName, nn);
+}
+function deleteVariableItem(name){
+  if(VAR_PROTECTED_ITEMS.includes(name)){ alert('หมวดนี้ลบไม่ได้ (ผูกกับระบบอัตโนมัติ)'); return; }
+  if(!confirm(`ลบหมวด "${name}" ?\nยอดทุกเดือนของหมวดนี้จะถูกลบออกจาก Sheets ด้วย (ย้อนกลับไม่ได้)`)) return;
+  applyDeleteVarItem(name);
+}
+// ── หน้าต่างจัดการหมวด (แบบ 1: เพิ่ม/แก้/ลบ ในที่เดียว) ──
+function curFreqList(){ return _varFreq==='daily'?DAILY_ITEMS : _varFreq==='yearly'?YEARLY_ITEMS : VARIABLE_ITEMS; }
+function openVarCatManager(){ renderVarCatManager(); const el=document.getElementById('var-catmgr'); if(el) el.style.display='block'; }
+function closeVarCatManager(){ const el=document.getElementById('var-catmgr'); if(el) el.style.display='none'; }
+function renderVarCatManager(){
+  const el=document.getElementById('var-catmgr'); if(!el) return;
+  const list=curFreqList().filter(it=>!VAR_PROTECTED_ITEMS.includes(it));
+  const freqLabel=_varFreq==='daily'?'รายวัน':_varFreq==='yearly'?'รายปี':'รายเดือน';
+  let rows = list.map(it=>{
+    const k=it.replace(/'/g,"\\'");
+    const v=it.replace(/"/g,'&quot;');
+    return `<div style="display:flex;align-items:center;gap:8px;padding:9px 4px;border-bottom:1px solid var(--bd)">`
+      + `<input value="${v}" data-orig="${v}" onchange="vcRename(this)" style="flex:1;font-size:13.5px;padding:7px 10px;border:1px solid var(--bd);border-radius:8px;font-family:var(--font)">`
+      + `<span onclick="vcDelete('${k}')" title="ลบหมวด" style="cursor:pointer;width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;border-radius:8px;background:#ffecec;border:1px solid #ffc9c9;font-size:14px">🗑️</span>`
+      + `</div>`;
+  }).join('');
+  if(!list.length) rows = `<div style="font-size:12.5px;color:var(--tx3);text-align:center;padding:14px">ยังไม่มีหมวด${freqLabel}ที่แก้ได้ — เพิ่มด้านล่าง</div>`;
+  el.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <div style="font-size:13.5px;font-weight:800;color:var(--pkd)">⚙️ จัดการหมวด${freqLabel}</div>
+      <button onclick="closeVarCatManager()" style="border:none;background:none;cursor:pointer;font-size:13px;color:var(--tx3);font-weight:700">เสร็จ ✓</button>
+    </div>
+    <div style="background:#fff;border:1px solid var(--bd);border-radius:12px;padding:4px 10px;max-height:240px;overflow-y:auto">${rows}</div>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:10px">
+      <input id="vc-newname" placeholder="ชื่อหมวดใหม่ (ใส่อีโมจิหน้าได้ เช่น 💧 ค่าน้ำ)" onkeydown="if(event.key==='Enter')vcAdd()" style="flex:1;font-size:13px;padding:9px 11px;border:1px solid var(--bd);border-radius:10px;font-family:var(--font)">
+      <button onclick="vcAdd()" style="background:var(--pkd);color:#fff;border:none;border-radius:10px;padding:9px 16px;font-weight:800;font-size:13px;cursor:pointer">+ เพิ่ม</button>
+    </div>
+    <div style="font-size:11.5px;color:var(--tx3);margin-top:7px">💾 บันทึกลง Sheets อัตโนมัติ — เพิ่มแล้วไม่หายแม้สลับเดือน/รีเฟรช</div>`;
+}
+function vcRename(inp){
+  const orig=inp.getAttribute('data-orig'); const nn=(inp.value||'').trim().replace(/['"]/g,'');
+  if(!nn || nn===orig){ inp.value=orig; return; }
+  if(applyRenameVarItem(orig, nn)) renderVarCatManager(); else inp.value=orig;
+}
+function vcDelete(name){
+  if(!confirm(`ลบหมวด "${name}" ?\nยอดทุกเดือนของหมวดนี้จะถูกลบออกจาก Sheets ด้วย`)) return;
+  applyDeleteVarItem(name); renderVarCatManager();
+}
+function vcAdd(){
+  const inp=document.getElementById('vc-newname'); const name=(inp.value||'').trim().replace(/['"]/g,'');
+  if(!name){ alert('พิมพ์ชื่อหมวดก่อน'); return; }
+  const all=[...DAILY_ITEMS,...VARIABLE_ITEMS,...YEARLY_ITEMS,'tax'];
+  if(all.includes(name)){ alert('มีหมวดนี้แล้ว'); return; }
+  if(_varFreq==='daily') DAILY_ITEMS.push(name);
+  else if(_varFreq==='monthly'){ VARIABLE_ITEMS.push(name); VARIABLE_FREQ[name]='monthly'; }
+  else YEARLY_ITEMS.push(name);
+  persistVarCats();
+  inp.value=''; _varActiveTab=name;
+  renderVarTabs(); if(_varFreq==='daily') renderVarDailyGrid(); else renderVarTable();
+  renderVarCatManager();
 }
 function saveVariableEditor(){
   if(_varFreq==='daily'){
@@ -5927,6 +6004,8 @@ document.getElementById('e-date').value=new Date().toISOString().slice(0,10);
     </div>
     <!-- แท็บหมวด (ชั้นที่ 2) -->
     <div id="var-tabs" style="display:flex;gap:6px;margin:14px 0;flex-wrap:wrap;align-items:center"></div>
+    <!-- หน้าต่างจัดการหมวด (ซ่อน — เปิดด้วยปุ่ม ⚙️ จัดการหมวด) -->
+    <div id="var-catmgr" style="display:none;background:rgba(255,255,255,.55);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid var(--pk);border-radius:14px;padding:14px;margin-bottom:14px"></div>
     <!-- กล่องเพิ่มหมวด (ซ่อน) -->
     <div id="var-addbox" style="display:none;background:var(--pkl);border:1px dashed var(--pk);border-radius:10px;padding:12px;margin-bottom:14px;gap:8px;align-items:center;flex-wrap:wrap">
       <input id="var-newname" placeholder="ชื่อหมวดใหม่" style="flex:1;min-width:160px;padding:8px 10px;border:1px solid var(--bd);border-radius:7px;font-family:var(--font);font-size:13px">
