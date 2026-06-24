@@ -144,7 +144,7 @@ input[type=date]:focus{border-color:var(--pk)}
 /* CARDS */
 .card{background:linear-gradient(var(--sf),var(--sf)) padding-box,linear-gradient(135deg,var(--cg1),var(--cg2)) border-box;border:4px solid transparent;border-radius:22px;padding:18px 20px;margin-bottom:16px;box-shadow:var(--sh)}
 .chead{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
-.ctitle{font-size:14.5px;font-weight:800;color:var(--pkd);display:flex;align-items:center;gap:8px}.ct-ico{width:32px;height:32px;border-radius:50%;background:var(--pk);color:#fff;display:flex;align-items:center;justify-content:center;flex:0 0 auto}.ct-ico svg{width:18px;height:18px}
+.ctitle{font-size:14.5px;font-weight:800;color:var(--pkd);display:flex;align-items:center;gap:8px}.cmp-card-title{display:flex!important;align-items:center;gap:8px;color:var(--pkd)!important;font-size:14.5px!important;font-weight:800}.ct-ico{width:32px;height:32px;border-radius:50%;background:var(--pk);color:#fff;display:flex;align-items:center;justify-content:center;flex:0 0 auto}.ct-ico svg{width:18px;height:18px}
 .cbadge{font-size:10px;font-weight:600;padding:2px 9px;border-radius:20px;background:var(--pkl);color:var(--pkd)}
 .twocol{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;margin-bottom:16px}
 @media(max-width:900px){.twocol{grid-template-columns:1fr}}
@@ -5483,7 +5483,7 @@ function renderExpPage(){
   const heroEl = document.getElementById('pl-hero');
   if(heroEl){
     heroEl.classList.toggle('loss', !isProfit);
-    document.getElementById('pl-hero-lbl').textContent = isProfit ? '✅ กำไรสุทธิ' : '🔻 ขาดทุนสุทธิ';
+    document.getElementById('pl-hero-lbl').innerHTML = iconize(isProfit ? '✅ กำไรสุทธิ' : '🔻 ขาดทุนสุทธิ', 13, 'currentColor');
     document.getElementById('pl-hero-val').textContent = (netProfit<0?'−':'') + B(Math.abs(netProfit));
     document.getElementById('pl-hero-badge').textContent = isProfit ? '▲ กำไร' : '▼ ขาดทุน';
     document.getElementById('pl-margin').textContent = `อัตรากำไรสุทธิ ${netMarginPct.toFixed(1)}%`;
@@ -7103,9 +7103,9 @@ watch();
 </script>
 <script>
 (function(){
-  var MAP=[["ads-account-tbody","ads-banner"],["ads-detail-grid","megaphone"],["inv-row","box"],["stock-inv-row","warehouse"],["cust-n","customers"],["prod-sort","box"],["exp-hero","wallet"],["exp-list-count","list"],["exp-breakdown-d","money-out"],["chart-ch-full","shop"],["dash-ch-fb","shop"],["e-cat","edit"],["exp-tab-image","upload"]];
+  var MAP=[["cmpbar","balance"],["ads-account-tbody","ads-banner"],["ads-detail-grid","megaphone"],["inv-row","box"],["stock-inv-row","warehouse"],["cust-n","customers"],["prod-sort","box"],["exp-hero","wallet"],["exp-list-count","list"],["exp-breakdown-d","money-out"],["chart-ch-full","shop"],["dash-ch-fb","shop"],["e-cat","edit"],["exp-tab-image","upload"]];
   function doodleFor(ct){ var box=ct.closest(".card")||ct.parentElement; var h=box?box.innerHTML:""; for(var i=0;i<MAP.length;i++){ if(h.indexOf("id=\""+MAP[i][0]+"\"")!==-1) return MAP[i][1]; } return "sparkle"; }
-  function deco(){ if(typeof svgIco!=="function") return; document.querySelectorAll(".ctitle").forEach(function(ct){ if(ct.querySelector(".ct-ico")) return; var sp=document.createElement("span"); sp.className="ct-ico"; sp.innerHTML=svgIco(doodleFor(ct),16,"#fff"); ct.insertBefore(sp,ct.firstChild); }); }
+  function deco(){ if(typeof svgIco!=="function") return; document.querySelectorAll(".ctitle, .cmp-card-title").forEach(function(ct){ if(ct.querySelector(".ct-ico")) return; var sp=document.createElement("span"); sp.className="ct-ico"; sp.innerHTML=svgIco(doodleFor(ct),16,"#fff"); var _sv=sp.querySelector("svg"); if(_sv){ var _w=parseFloat(_sv.getAttribute("stroke-width"))||2.2; _sv.setAttribute("stroke-width",(_w*1.5).toFixed(2)); } ct.insertBefore(sp,ct.firstChild); }); }
   if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",deco); else deco();
   [300,900,2000,4000].forEach(function(t){ setTimeout(deco,t); });
   var dt=null; var mo=new MutationObserver(function(){ if(dt) return; dt=setTimeout(function(){dt=null;deco();},250); });
