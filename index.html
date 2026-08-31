@@ -7434,5 +7434,275 @@ window.__RCG4=function(){
 window.__RCG4();
 })();
 </script>
+<script>
+/* SURU data-gap bell v1 — additive only, render-layer */
+(function(){
+  if(window.__suruGapInstalled) return; window.__suruGapInstalled = true;
+
+  var MCF_ID = '1BB4KXYhDRhmN7if9IVOuaoPJhzR9021GUiAJs5KwP9k'; // เดียวกับตัวโหลดชื่อสินค้าเดิม (อ่านอย่างเดียว)
+  var yenGap = null;
+
+  var CSS = ''
+   + '#sgap-btn{position:fixed;top:calc(env(safe-area-inset-top,0px) + 10px);right:118px;z-index:2147482900;'
+   + 'width:34px;height:34px;border-radius:12px;background:#fff;border:1.5px solid #FAD3E4;cursor:pointer;'
+   + 'display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(217,78,143,.18);opacity:.95;padding:0;}'
+   + '#sgap-btn svg{width:19px;height:19px;stroke:#D94E8F;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}'
+   + '#sgap-dot{position:absolute;top:-6px;right:-6px;min-width:18px;height:18px;border-radius:9px;background:#E24B4A;color:#fff;'
+   + "font-family:'Sarabun',sans-serif;font-size:11px;font-weight:700;line-height:18px;text-align:center;padding:0 4px;box-sizing:border-box;}"
+   + '#sgap-dot.ok{background:#1D9E75;}'
+   + '#sgap-panel{position:fixed;top:calc(env(safe-area-inset-top,0px) + 52px);right:12px;z-index:2147482901;width:330px;max-width:calc(100vw - 24px);'
+   + 'max-height:70vh;overflow-y:auto;background:#fff;border:1.5px solid #FAD3E4;border-radius:16px;padding:14px 16px;'
+   + "font-family:'Sarabun',sans-serif;box-shadow:0 10px 30px -8px rgba(217,78,143,.30);display:none;}"
+   + '#sgap-panel.on{display:block;}'
+   + '.sgap-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}'
+   + '.sgap-t{font-size:14px;font-weight:700;color:#D94E8F;}'
+   + '.sgap-x{background:none;border:none;font-size:18px;line-height:1;color:#C9A8BB;cursor:pointer;padding:0 2px;}'
+   + '.sgap-i{padding:10px 0;border-top:1px solid #FBEAF0;}'
+   + '.sgap-i:first-of-type{border-top:none;}'
+   + '.sgap-n{font-size:13px;font-weight:700;color:#3B3B3B;display:flex;align-items:center;gap:6px;}'
+   + '.sgap-d{font-size:12px;color:#8A8A8A;line-height:1.55;margin-top:3px;}'
+   + '.sgap-b{width:8px;height:8px;border-radius:4px;flex:none;}'
+   + '.sgap-f{font-size:11px;color:#B9B9B9;margin-top:10px;padding-top:8px;border-top:1px solid #FBEAF0;}';
+
+  function inject(){
+    if(document.getElementById('sgap-css')) return;
+    var st = document.createElement('style'); st.id = 'sgap-css'; st.textContent = CSS;
+    (document.head || document.documentElement).appendChild(st);
+  }
+
+  function pad(n){ return (n<10?'0':'') + n; }
+  function toYMD(d){ return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()); }
+  function dayDiff(a, b){ return Math.round((b - a) / 86400000); }
+  var TH = ['','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  function moLabel(mo){
+    var p = String(mo).split('-');
+    return TH[parseInt(p[1],10)] + ' ' + (parseInt(p[0],10) + 543);
+  }
+  function dayLabel(ymd){
+    var p = String(ymd).split('-');
+    return parseInt(p[2],10) + ' ' + TH[parseInt(p[1],10)] + ' ' + (parseInt(p[0],10) + 543);
+  }
+  function daysInMonth(mo){
+    var p = String(mo).split('-');
+    return new Date(parseInt(p[0],10), parseInt(p[1],10), 0).getDate();
+  }
+  function nf(n){ return Number(n).toLocaleString('en-US'); }
+  function curMonth(){ var d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth()+1); }
+  function addMonth(mo, k){ var p = String(mo).split('-'); var d = new Date(parseInt(p[0],10), parseInt(p[1],10)-1+k, 1); return d.getFullYear() + '-' + pad(d.getMonth()+1); }
+  // ไล่เดือนจาก a ถึง b (รวมปลายทั้งสอง) — ไม้บรรทัดคือ "วันนี้" ไม่ใช่เดือนล่าสุดที่มีข้อมูล
+  function moRange(a, b){ var r = [], c = a, guard = 0; while(c <= b && guard++ < 600){ r.push(c); c = addMonth(c, 1); } return r; }
+  // แสดงชื่อเดือนไม่เกิน 3 ตัว (เอาเดือนล่าสุด) แล้วสรุปที่เหลือ
+  function listMonths(arr){
+    if(arr.length <= 3) return arr.map(moLabel).join(', ');
+    return arr.slice(-3).map(moLabel).join(', ') + ' และอีก ' + (arr.length - 3) + ' เดือน';
+  }
+
+  function loadYenGap(){
+    try {
+      var base = 'https://docs.google.com/spreadsheets/d/' + MCF_ID + '/gviz/tq?tqx=out:csv&headers=2&tq=';
+      var u1 = base + encodeURIComponent('select count(A) where E is null');
+      var u2 = base + encodeURIComponent('select count(A) where A is not null');
+      Promise.all([fetch(u1).then(function(r){return r.text();}), fetch(u2).then(function(r){return r.text();})])
+        .then(function(txts){
+          function val(t){
+            var m = String(t).replace(/"/g,'').match(/(\d+)\s*$/m);
+            var lines = String(t).replace(/"/g,'').trim().split('\n');
+            var last = lines[lines.length-1].trim();
+            var n = parseInt(last, 10);
+            if(!isNaN(n)) return n;
+            return m ? parseInt(m[1],10) : null;
+          }
+          var blank = val(txts[0]), total = val(txts[1]);
+          if(blank != null && total) { yenGap = {blank: blank, total: total}; render(); }
+        })
+        .catch(function(){});
+    } catch(e){}
+  }
+
+  function lastSalesDate(){
+    try {
+      var rows = (typeof getAllDaily === 'function') ? getAllDaily() : [];
+      var last = '';
+      for(var i=0;i<rows.length;i++){
+        var r = rows[i];
+        if(r && r.date && (Number(r.revenue)||0) > 0 && r.date > last) last = r.date;
+      }
+      return last || null;
+    } catch(e){ return null; }
+  }
+
+  function monthsWithSales(){
+    var set = {};
+    try {
+      var rows = (typeof getAllDaily === 'function') ? getAllDaily() : [];
+      rows.forEach(function(r){ if(r && r.date && (Number(r.revenue)||0) > 0) set[String(r.date).slice(0,7)] = 1; });
+    } catch(e){}
+    return Object.keys(set).sort();
+  }
+
+  function salesDaysIn(mo){
+    var n = 0;
+    try {
+      var rows = (typeof getAllDaily === 'function') ? getAllDaily() : [];
+      rows.forEach(function(r){ if(r && r.date && String(r.date).slice(0,7) === mo && (Number(r.revenue)||0) > 0) n++; });
+    } catch(e){}
+    return n;
+  }
+
+  function computeGaps(){
+    var out = [];
+    var today = new Date(); today.setHours(0,0,0,0);
+    var yest = new Date(today.getTime() - 86400000);
+    var moSales = monthsWithSales();
+    var lastMo = moSales.length ? moSales[moSales.length-1] : null;
+
+    // 1. ยอดขาย
+    var ls = lastSalesDate();
+    if(ls){
+      var d = new Date(ls + 'T00:00:00');
+      var behind = dayDiff(d, yest);
+      if(behind > 1){
+        var extra = '';
+        if(lastMo){
+          var have = salesDaysIn(lastMo), tot = daysInMonth(lastMo);
+          if(have < tot) extra += ' · ' + moLabel(lastMo) + ' มีแค่ ' + have + '/' + tot + ' วัน';
+          // เดือนหลังจากนั้นจนถึงเดือนนี้ = ยังไม่มีข้อมูลเลย
+          var blankMos = moRange(addMonth(lastMo, 1), curMonth());
+          if(blankMos.length) extra += ' · ' + listMonths(blankMos) + ' ยังไม่มีเลย';
+        }
+        out.push({sev: behind > 20 ? 2 : 1, name: 'ยอดขายขาด ' + behind + ' วัน',
+                  desc: 'ล่าสุด ' + dayLabel(ls) + extra});
+      }
+    } else {
+      out.push({sev:2, name:'ยังไม่มีข้อมูลยอดขาย', desc:'อัปโหลดไฟล์ขายจาก Page365 ก่อน'});
+    }
+
+    // 2. ต้นทุน ¥ ที่ยังว่างใน Master CF
+    if(yenGap && yenGap.blank > 0){
+      var pct = Math.round(yenGap.blank / yenGap.total * 100);
+      out.push({sev:2, name:'ต้นทุน ¥ ว่าง ' + nf(yenGap.blank) + ' รหัส',
+                desc:'จาก ' + nf(yenGap.total) + ' รหัสใน Master CF (' + pct + '%) · รหัสพวกนี้คิดต้นทุนแค่ค่าส่ง ทำให้กำไรสูงเกินจริง'});
+    }
+
+    // 3. ค่าแอด
+    try {
+      var am = {};
+      Object.keys(ADS_STORE||{}).forEach(function(k){
+        var t = ADS_STORE[k]; var m = t && (t.mo || String(t.date||'').slice(0,7));
+        if(m) am[m] = 1;
+      });
+      var adMos = Object.keys(am).sort();
+      var lastAd = adMos.length ? adMos[adMos.length-1] : null;
+      // เริ่มนับจากเดือนแรกที่ระบบเก็บค่าแอด ถึง "เดือนนี้" (ค่าแอดตัดทุกวัน เดือนปัจจุบันจึงนับด้วย)
+      var base = adMos.length ? adMos[0] : null;
+      var missAd = base ? moRange(base, curMonth()).filter(function(m){ return !am[m]; }) : [];
+      if(missAd.length){
+        out.push({sev:1, name:'ค่าแอดขาด ' + missAd.length + ' เดือน',
+                  desc:(lastAd ? 'ล่าสุด ' + moLabel(lastAd) + ' · ' : '') + 'ขาด ' + listMonths(missAd) + ' · ทำให้ ROAS แสดง 0.00x'});
+      }
+    } catch(e){}
+
+    // 4. ภาษี
+    try {
+      var taxMos = Object.keys(TAX_STORE||{}).sort();
+      var tBase = taxMos.length ? taxMos[0] : null;
+      // ภาษียื่นได้ต่อเมื่อเดือนนั้นจบแล้ว → นับถึงเดือนที่จบล่าสุด ไม่รวมเดือนปัจจุบัน
+      var missTax = tBase ? moRange(tBase, addMonth(curMonth(), -1)).filter(function(m){
+        var t = (TAX_STORE||{})[m];
+        return !t || (Number(t.pp30)||0) === 0;
+      }) : [];
+      if(missTax.length){
+        out.push({sev:1, name:'ภ.พ.30 ขาด ' + missTax.length + ' เดือน',
+                  desc:'ยังไม่ได้กรอกของ ' + listMonths(missTax)});
+      }
+    } catch(e){}
+
+    // 5. ค่าใช้จ่ายผันแปรรายวัน (ค่าส่งไปรษณีย์ ฯลฯ)
+    try {
+      var dv = Object.keys(DAILY_VAR_STORE||{}).sort();
+      var lastDv = dv.length ? dv[dv.length-1] : null;
+      if(lastDv){
+        var bd = dayDiff(new Date(lastDv + 'T00:00:00'), yest);
+        if(bd > 1) out.push({sev: bd > 20 ? 1 : 0, name:'ค่าใช้จ่ายรายวันขาด ' + bd + ' วัน', desc:'ล่าสุด ' + dayLabel(lastDv)});
+      }
+    } catch(e){}
+
+    out.sort(function(a,b){ return b.sev - a.sev; });
+    return out;
+  }
+
+  function render(){
+    var btn = document.getElementById('sgap-btn'), panel = document.getElementById('sgap-panel');
+    if(!btn || !panel) return;
+    var gaps = computeGaps();
+    var dot = document.getElementById('sgap-dot');
+    if(dot){
+      var label = gaps.length ? String(gaps.length) : '✓';
+      var cls = gaps.length ? '' : 'ok';
+      if(dot.textContent !== label) dot.textContent = label;
+      if(dot.className !== cls) dot.className = cls;
+    }
+    // วาดเนื้อในแผงเฉพาะตอนเปิดอยู่ — กัน innerHTML เปลี่ยนรัวๆ ไปกวน MutationObserver ของโดโด้
+    if(!panel.classList.contains('on')) return;
+    drawPanel(gaps);
+  }
+
+  function drawPanel(gaps){
+    var panel = document.getElementById('sgap-panel');
+    if(!panel) return;
+    if(!gaps) gaps = computeGaps();
+    var COL = ['#BA7517','#EF9F27','#E24B4A'];
+    var html = '<div class="sgap-h"><span class="sgap-t">ข้อมูลที่ยังขาด' + (gaps.length ? ' (' + gaps.length + ')' : '') + '</span>'
+             + '<button class="sgap-x" id="sgap-x" aria-label="ปิด">×</button></div>';
+    if(!gaps.length){
+      html += '<div class="sgap-i"><div class="sgap-n"><span class="sgap-b" style="background:#1D9E75"></span>ข้อมูลครบทุกอย่าง</div>'
+            + '<div class="sgap-d">ไม่พบช่องว่างของข้อมูลในตอนนี้</div></div>';
+    } else {
+      gaps.forEach(function(g){
+        html += '<div class="sgap-i"><div class="sgap-n"><span class="sgap-b" style="background:' + COL[g.sev] + '"></span>' + g.name + '</div>'
+              + '<div class="sgap-d">' + g.desc + '</div></div>';
+      });
+    }
+    var _t = new Date();
+    html += '<div class="sgap-f">เทียบกับวันนี้ ' + dayLabel(_t.getFullYear() + '-' + pad(_t.getMonth()+1) + '-' + pad(_t.getDate())) + '</div>';
+    panel.innerHTML = html;
+    var x = document.getElementById('sgap-x');
+    if(x) x.onclick = function(){ panel.classList.remove('on'); };
+  }
+
+  function mount(){
+    if(document.getElementById('sgap-btn')) return;
+    inject();
+    var b = document.createElement('button');
+    b.id = 'sgap-btn'; b.type = 'button'; b.setAttribute('aria-label','ข้อมูลที่ยังขาด');
+    b.innerHTML = '<svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"></path>'
+                + '<path d="M13.7 21a2 2 0 0 1-3.4 0"></path></svg><span id="sgap-dot">·</span>';
+    b.style.position = 'fixed';
+    var p = document.createElement('div');
+    p.id = 'sgap-panel';
+    (document.body || document.documentElement).appendChild(b);
+    (document.body || document.documentElement).appendChild(p);
+    b.onclick = function(){
+      if(p.classList.contains('on')){ p.classList.remove('on'); }
+      else { drawPanel(); p.classList.add('on'); }
+    };
+    render();
+  }
+
+  function boot(){
+    try { mount(); } catch(e){ console.warn('sgap mount', e); }
+    try { loadYenGap(); } catch(e){}
+    var n = 0;
+    var t = setInterval(function(){
+      n++;
+      try { render(); } catch(e){}
+      if(n > 20 || (typeof SHEETS_LOADED !== 'undefined' && SHEETS_LOADED && n > 6)) clearInterval(t);
+    }, 1500);
+  }
+
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+})();
+</script>
 </body>
 </html>
